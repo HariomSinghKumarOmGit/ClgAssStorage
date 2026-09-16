@@ -1,0 +1,208 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  USER      // Approved uploader — 10 files, 5MB each
+  NURD      // Power uploader — 30 files, 10MB each
+  MODERATOR // Can approve/reject assignments
+  ADMIN     // Full control
+}
+
+enum AssignmentStatus {
+  PENDING  // Awaiting moderator review
+  APPROVED // Publicly visible
+  REJECTED // Rejected by moderator
+  EXPIRED  // Pending for >7 days, auto-deleted
+}
+
+// ─── Users ────────────────────────────────────────────────────────────────────
+
+model User {
+  id            String   @id @default(cuid())
+  name          String?
+  email         String   @unique
+  emailVerified DateTime?
+  image         String?
+  role          UserRole @default(USER)
+  isApproved    Boolean  @default(false) // Must be approved by admin before uploading
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  accounts          Account[]
+  sessions          Session[]
+  assignments       Assignment[]       @relation("UploadedBy")
+  approvedAssignments Assignment[]     @relation("ApprovedBy")
+  rejectedAssignments Assignment[]     @relation("RejectedBy")
+  accessRequest     AccessRequest?
+  reports           Report[]
+  createdFolders    Folder[]
+
+  @@index([email])
+  @@index([role])
+  @@index([isApproved])
+}
+
+// ─── Auth.js adapter tables ───────────────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── Access Requests ──────────────────────────────────────────────────────────
+
+model AccessRequest {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  reason      String?  // Why they want upload access
+  status      String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  reviewedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+}
+
+// ─── Folders ──────────────────────────────────────────────────────────────────
+
+model Folder {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  parentId    String?  // Null = top-level folder
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  parent      Folder?      @relation("FolderChildren", fields: [parentId], references: [id])
+  children    Folder[]     @relation("FolderChildren")
+  createdBy   User         @relation(fields: [createdById], references: [id])
+  assignments Assignment[]
+
+  @@index([slug])
+  @@index([parentId])
+}
+
+// ─── Assignments ──────────────────────────────────────────────────────────────
+
+model Assignment {
+  id              String           @id @default(cuid())
+  title           String
+  slug            String           @unique
+  description     String           @db.Text
+  subject         String
+  course          String?
+  semester        String?
+  college         String?
+  university      String?
+  tags            String[]         @default([])
+  folderId        String?
+
+  // File info
+  fileName        String           // Original user filename (display only)
+  fileSize        Int              // Bytes
+  fileType        String           // MIME type
+  storageKey      String           // Actual storage path (never raw filename)
+  fileHash        String?          // SHA-256 for duplicate detection
+
+  // Status
+  status          AssignmentStatus @default(PENDING)
+  rejectionReason String?
+
+  // Ownership
+  uploadedById    String
+  approvedById    String?
+  rejectedById    String?
+
+  // Timestamps
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  expiresAt       DateTime         // 7 days from upload
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+
+  // Stats
+  downloadCount   Int              @default(0)
+
+  // Relations
+  uploadedBy      User             @relation("UploadedBy", fields: [uploadedById], references: [id])
+  approvedBy      User?            @relation("ApprovedBy", fields: [approvedById], references: [id])
+  rejectedBy      User?            @relation("RejectedBy", fields: [rejectedById], references: [id])
+  folder          Folder?          @relation(fields: [folderId], references: [id])
+  reports         Report[]
+
+  @@index([status])
+  @@index([subject])
+  @@index([course])
+  @@index([semester])
+  @@index([college])
+  @@index([createdAt])
+  @@index([slug])
+  @@index([uploadedById])
+  @@index([folderId])
+  @@index([fileHash])
+}
+
+// ─── Reports ──────────────────────────────────────────────────────────────────
+
+model Report {
+  id           String   @id @default(cuid())
+  assignmentId String
+  reportedById String?  // Null if anonymous
+  reason       String
+  details      String?  @db.Text
+  status       String   @default("OPEN") // OPEN | RESOLVED | DISMISSED
+  createdAt    DateTime @default(now())
+  resolvedAt   DateTime?
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  reportedBy User?      @relation(fields: [reportedById], references: [id])
+
+  @@index([assignmentId])
+  @@index([status])
+}
