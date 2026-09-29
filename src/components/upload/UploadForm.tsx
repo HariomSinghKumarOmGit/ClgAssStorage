@@ -35,12 +35,14 @@ export function UploadForm({ folders }: UploadFormProps) {
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] ?? null;
-    setFile(f);
-    if (f && !ALLOWED_MIME_LIST.includes(f.type)) {
-      setError("File type not allowed. Use PDF, DOC, DOCX, PPT, PPTX, or TXT.");
-    } else if (f && f.size > limits.maxFileSizeBytes) {
-      setError(`File too large. Your limit is ${limits.maxFileSizeMB} MB.`);
+    const MAX_5MB = 5 * 1024 * 1024;
+    
+    if (f && f.size > MAX_5MB) {
+      setFile(null);
+      setError("⚠️ File size exceeds 5MB restriction. Please select a file under 5MB.");
+      if (fileRef.current) fileRef.current.value = "";
     } else {
+      setFile(f);
       setError("");
     }
   }

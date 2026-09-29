@@ -4,6 +4,12 @@ const prisma = new PrismaClient();
 
 async function main() {
   console.log("Seeding database...");
+  console.log("\nRole hierarchy:");
+  console.log("  USER (default)     — browse + download. Upload if approved.");
+  console.log("  NURD               — approved uploader with higher limits (10MB, 30 files).");
+  console.log("  MODERATOR          — approve/reject submissions only.");
+  console.log("  SENIOR_MODERATOR   — approve/reject + create/rename folders.");
+  console.log("  ADMIN              — full control.\n");
 
   // Create initial folders
   const folders = [

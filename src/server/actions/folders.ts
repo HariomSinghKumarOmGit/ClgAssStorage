@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { requireAdmin } from "@/lib/auth/helpers";
+import { requireAdmin, requireSeniorModerator } from "@/lib/auth/helpers";
 import { generateFolderSlug } from "@/lib/validation/upload";
 
 export interface FolderResult {
@@ -16,7 +16,8 @@ export async function createFolder(
   description?: string
 ): Promise<FolderResult> {
   try {
-    const admin = await requireAdmin();
+    // SENIOR_MODERATOR and ADMIN can create folders
+    const user = await requireSeniorModerator();
 
     if (!name?.trim() || name.length < 2) {
       return { success: false, error: "Folder name must be at least 2 characters" };
@@ -30,17 +31,17 @@ export async function createFolder(
         slug,
         description: description?.trim() || null,
         parentId: parentId || null,
-        createdById: admin.id,
+        createdById: user.id,
       },
     });
 
-    console.log(`[Folder] Created folder "${name}" (${folder.id}) by admin ${admin.id}`);
+    console.log(`[Folder] Created folder "${name}" (${folder.id}) by ${user.role} ${user.id}`);
 
     return { success: true, folderId: folder.id };
   } catch (err: unknown) {
     const error = err as Error;
     console.error("[Folder] Create error:", error.message);
-    if (error.message === "FORBIDDEN") return { success: false, error: "Access denied" };
+    if (error.message === "FORBIDDEN") return { success: false, error: "Access denied — requires Senior Moderator or Admin" };
     return { success: false, error: "Failed to create folder" };
   }
 }
@@ -50,7 +51,7 @@ export async function renameFolder(
   newName: string
 ): Promise<FolderResult> {
   try {
-    await requireAdmin();
+    await requireSeniorModerator();
 
     await db.folder.update({
       where: { id: folderId },
@@ -60,7 +61,7 @@ export async function renameFolder(
     return { success: true, folderId };
   } catch (err: unknown) {
     const error = err as Error;
-    if (error.message === "FORBIDDEN") return { success: false, error: "Access denied" };
+    if (error.message === "FORBIDDEN") return { success: false, error: "Access denied — requires Senior Moderator or Admin" };
     return { success: false, error: "Failed to rename folder" };
   }
 }

@@ -7,7 +7,11 @@ export async function Navbar() {
   const session = await auth();
   const user = session?.user;
 
-  const isAdmin = user?.role === "ADMIN" || user?.role === "MODERATOR";
+  const isAdmin = user?.role === "ADMIN";
+  const canModerate =
+    user?.role === "MODERATOR" ||
+    user?.role === "SENIOR_MODERATOR" ||
+    user?.role === "ADMIN";
 
   return (
     <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-200">
@@ -24,29 +28,31 @@ export async function Navbar() {
           </Link>
 
           {/* Navigation */}
-          <div className="hidden md:flex items-center gap-6">
+          <div className="flex items-center gap-4 sm:gap-6">
+            <Link
+              href="/"
+              className="text-sm font-bold text-gray-900 hover:text-brand-600 transition-colors"
+            >
+              HOME
+            </Link>
             <Link
               href="/assignments"
               className="text-sm text-gray-600 hover:text-gray-900 font-medium transition-colors"
             >
               Browse
             </Link>
-            {user && (
-              <Link
-                href="/upload"
-                className="text-sm text-gray-600 hover:text-gray-900 font-medium transition-colors"
-              >
-                Upload
-              </Link>
-            )}
-            {isAdmin && (
-              <Link
-                href="/admin"
-                className="text-sm text-orange-600 hover:text-orange-700 font-medium transition-colors"
-              >
-                Admin ⚡
-              </Link>
-            )}
+            <Link
+              href="/admin"
+              className="text-sm text-brand-700 hover:text-brand-900 font-bold transition-colors"
+            >
+              Admin Panel
+            </Link>
+            <Link
+              href="/upload"
+              className="text-xs bg-brand-600 hover:bg-brand-700 text-white font-bold px-3.5 py-1.5 rounded-xl shadow-sm transition-colors flex items-center gap-1"
+            >
+              <span>➕</span> Upload (5MB)
+            </Link>
           </div>
 
           {/* Auth */}

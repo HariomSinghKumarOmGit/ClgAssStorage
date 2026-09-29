@@ -3,8 +3,9 @@ import { auth } from "@/lib/auth/config";
 import { db } from "@/lib/db";
 import { AdminQueueTable } from "@/components/admin/AdminQueueTable";
 import type { Metadata } from "next";
-import type { AssignmentStatus } from "@prisma/client";
+import type { AssignmentStatus, UserRole } from "@prisma/client";
 import Link from "next/link";
+import { canModerate } from "@/lib/auth/helpers";
 
 export const metadata: Metadata = { title: "Review Queue" };
 
@@ -17,7 +18,7 @@ export default async function AdminQueuePage({
 }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
-  if (session.user.role !== "ADMIN" && session.user.role !== "MODERATOR") redirect("/");
+  if (!canModerate(session.user.role as UserRole)) redirect("/");
 
   const statusFilter = VALID_STATUSES.includes(searchParams.status as AssignmentStatus)
     ? (searchParams.status as AssignmentStatus)

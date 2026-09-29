@@ -116,7 +116,8 @@ export function generateSlug(title: string): string {
 // ─── SHA-256 hash ──────────────────────────────────────────────────────────────
 
 export async function computeFileHash(buffer: Buffer): Promise<string> {
-  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+  const uint8 = new Uint8Array(buffer);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", uint8);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }

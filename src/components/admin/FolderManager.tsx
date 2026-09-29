@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/Button";
 import { createFolder, renameFolder, deleteFolder } from "@/server/actions/folders";
+import { canDeleteFolders } from "@/lib/auth/helpers";
+import type { UserRole } from "@prisma/client";
 
 type FolderNode = {
   id: string;
@@ -19,12 +22,16 @@ interface FolderManagerProps {
 
 export function FolderManager({ folders }: FolderManagerProps) {
   const router = useRouter();
-  const [creating, setCreating] = useState<string | null>(null); // null = top-level, parentId = subfolder
+  const { data: session } = useSession();
+  const [creating, setCreating] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState("");
+
+  const role = (session?.user?.role ?? "USER") as UserRole;
+  const allowDelete = canDeleteFolders(role);
 
   async function handleCreate(parentId?: string) {
     if (!newName.trim()) return;
@@ -54,6 +61,7 @@ export function FolderManager({ folders }: FolderManagerProps) {
   }
 
   async function handleDelete(id: string, name: string) {
+    if (!allowDelete) return;
     if (!confirm(`Delete folder "${name}"? This cannot be undone.`)) return;
     setLoading(true);
     const result = await deleteFolder(id);
@@ -108,13 +116,23 @@ export function FolderManager({ folders }: FolderManagerProps) {
               >
                 Rename
               </Button>
-              <Button
-                size="sm"
-                variant="danger"
-                onClick={() => handleDelete(folder.id, folder.name)}
-              >
-                Delete
-              </Button>
+              {/* Delete: ADMIN only */}
+              {allowDelete ? (
+                <Button
+                  size="sm"
+                  variant="danger"
+                  onClick={() => handleDelete(folder.id, folder.name)}
+                >
+                  Delete
+                </Button>
+              ) : (
+                <span
+                  title="Only Admin can delete folders"
+                  className="inline-flex items-center px-2 py-1 text-xs text-gray-300 cursor-not-allowed select-none"
+                >
+                  🔒 Delete
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -135,7 +153,6 @@ export function FolderManager({ folders }: FolderManagerProps) {
           </div>
         )}
 
-        {/* Children */}
         {folder.children.map((child) => (
           <FolderItem key={child.id} folder={child} depth={depth + 1} />
         ))}
@@ -145,8 +162,23 @@ export function FolderManager({ folders }: FolderManagerProps) {
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 p-6">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <h2 className="font-semibold text-gray-900">Folders</h2>
+        {role === "SENIOR_MODERATOR" && (
+          <span className="text-xs text-teal-600 bg-teal-50 border border-teal-200 px-2 py-1 rounded-lg">
+            Sr. Mod — can create folders, cannot delete
+          </span>
+        )}
+      </div>
+
+      {!allowDelete && (
+        <div className="mb-4 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          🔒 Folder deletion requires Admin role. You can create and rename folders.
+        </div>
+      )}
+
+      <div className="flex items-center justify-between mb-4">
+        <span /> {/* spacer */}
         {creating === null ? (
           <Button variant="primary" size="sm" onClick={() => { setCreating("root"); setNewName(""); }}>
             + New Category

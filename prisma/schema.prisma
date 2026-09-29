@@ -8,16 +8,17 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
 enum UserRole {
-  USER      // Approved uploader — 10 files, 5MB each
-  NURD      // Power uploader — 30 files, 10MB each
-  MODERATOR // Can approve/reject assignments
-  ADMIN     // Full control
+  USER               // Base role — everyone starts here. Can upload if approved.
+  NURD               // Power uploader — 30 files, 10MB each
+  MODERATOR          // Approve/reject assignments ONLY. No folder or user management.
+  SENIOR_MODERATOR   // Approve/reject + create folders. Cannot delete folders or files.
+  ADMIN              // Full control — folders, users, files, everything.
 }
 
 enum AssignmentStatus {

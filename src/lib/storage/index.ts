@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import {
   S3Client,
   PutObjectCommand,
@@ -19,26 +21,44 @@ export interface StorageProvider {
   exists(key: string): Promise<boolean>;
 }
 
-// ─── Cloudflare R2 Implementation ────────────────────────────────────────────
+// ─── Universal S3 (Neon / R2 / AWS) Implementation ───────────────────────────
 
-class R2StorageProvider implements StorageProvider {
+class UniversalS3StorageProvider implements StorageProvider {
   private client: S3Client;
   private bucket: string;
   private publicUrl: string;
 
   constructor() {
-    const accountId = process.env.STORAGE_ACCOUNT_ID!;
-    this.bucket = process.env.STORAGE_BUCKET!;
-    this.publicUrl = process.env.STORAGE_PUBLIC_URL!;
+    const endpoint = process.env.AWS_ENDPOINT_URL_S3;
+    const accountId = process.env.STORAGE_ACCOUNT_ID;
+    
+    this.bucket = process.env.STORAGE_BUCKET || "asssubmit";
 
-    this.client = new S3Client({
-      region: "auto",
-      endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-      credentials: {
-        accessKeyId: process.env.STORAGE_ACCESS_KEY!,
-        secretAccessKey: process.env.STORAGE_SECRET_KEY!,
-      },
-    });
+    if (endpoint) {
+      // Neon Object Storage
+      this.client = new S3Client({
+        region: process.env.AWS_REGION || "us-east-2",
+        endpoint: endpoint,
+        credentials: {
+          accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
+          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
+        },
+      });
+      this.publicUrl = process.env.STORAGE_PUBLIC_URL || `${endpoint}/${this.bucket}`;
+    } else if (accountId) {
+      // Cloudflare R2
+      this.client = new S3Client({
+        region: "auto",
+        endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+        credentials: {
+          accessKeyId: process.env.STORAGE_ACCESS_KEY || "",
+          secretAccessKey: process.env.STORAGE_SECRET_KEY || "",
+        },
+      });
+      this.publicUrl = process.env.STORAGE_PUBLIC_URL || "";
+    } else {
+      throw new Error("No S3 configuration found");
+    }
   }
 
   async upload(key: string, body: Buffer, contentType: string): Promise<void> {
@@ -61,10 +81,8 @@ class R2StorageProvider implements StorageProvider {
         })
       );
     } catch (err: unknown) {
-      // If the file doesn't exist, treat as success (idempotent)
       const error = err as { name?: string; Code?: string };
       if (error?.name === "NoSuchKey" || error?.Code === "NoSuchKey") {
-        console.warn(`[Storage] File not found during delete: ${key}`);
         return;
       }
       throw err;
@@ -83,7 +101,7 @@ class R2StorageProvider implements StorageProvider {
 
   async getSignedDownloadUrl(
     key: string,
-    expiresInSeconds = 900 // 15 minutes
+    expiresInSeconds = 900
   ): Promise<string> {
     const command = new GetObjectCommand({
       Bucket: this.bucket,
@@ -93,7 +111,7 @@ class R2StorageProvider implements StorageProvider {
   }
 
   getPublicUrl(key: string): string {
-    return `${this.publicUrl}/${key}`;
+    return `/api/download/file?key=${encodeURIComponent(key)}`;
   }
 
   async exists(key: string): Promise<boolean> {
@@ -111,12 +129,62 @@ class R2StorageProvider implements StorageProvider {
   }
 }
 
+// ─── Local Storage Fallback ───────────────────────────────────────────────────
+
+class LocalStorageProvider implements StorageProvider {
+  private baseDir: string;
+
+  constructor() {
+    this.baseDir = path.join(process.cwd(), "public", "uploads");
+    if (!fs.existsSync(this.baseDir)) {
+      fs.mkdirSync(this.baseDir, { recursive: true });
+    }
+  }
+
+  async upload(key: string, body: Buffer): Promise<void> {
+    const filePath = path.join(this.baseDir, key);
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    await fs.promises.writeFile(filePath, body);
+  }
+
+  async delete(key: string): Promise<void> {
+    const filePath = path.join(this.baseDir, key);
+    if (fs.existsSync(filePath)) {
+      await fs.promises.unlink(filePath);
+    }
+  }
+
+  async copy(sourceKey: string, destKey: string): Promise<void> {
+    const src = path.join(this.baseDir, sourceKey);
+    const dest = path.join(this.baseDir, destKey);
+    const dir = path.dirname(dest);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    if (fs.existsSync(src)) {
+      await fs.promises.copyFile(src, dest);
+    }
+  }
+
+  async getSignedDownloadUrl(key: string): Promise<string> {
+    return `/uploads/${key}`;
+  }
+
+  getPublicUrl(key: string): string {
+    return `/uploads/${key}`;
+  }
+
+  async exists(key: string): Promise<boolean> {
+    const filePath = path.join(this.baseDir, key);
+    return fs.existsSync(filePath);
+  }
+}
+
 // ─── Storage key helpers ──────────────────────────────────────────────────────
 
-/**
- * Generate a safe, unpredictable private storage key.
- * Format: private/{userId}/{timestamp}-{randomId}.{ext}
- */
 export function generatePrivateKey(
   userId: string,
   originalFilename: string
@@ -127,10 +195,6 @@ export function generatePrivateKey(
   return `private/${userId}/${timestamp}-${randomId}.${ext}`;
 }
 
-/**
- * Generate a public storage key for approved assignments.
- * Format: public/{slug}/{assignmentId}.{ext}
- */
 export function generatePublicKey(
   assignmentId: string,
   slug: string,
@@ -146,7 +210,17 @@ let storageInstance: StorageProvider | null = null;
 
 export function getStorage(): StorageProvider {
   if (!storageInstance) {
-    storageInstance = new R2StorageProvider();
+    if (process.env.AWS_ENDPOINT_URL_S3 || process.env.STORAGE_ACCOUNT_ID) {
+      try {
+        storageInstance = new UniversalS3StorageProvider();
+      } catch (e) {
+        console.warn("[Storage] S3 initialization failed, falling back to local storage:", e);
+        storageInstance = new LocalStorageProvider();
+      }
+    } else {
+      storageInstance = new LocalStorageProvider();
+    }
   }
   return storageInstance;
 }
+

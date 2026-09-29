@@ -52,6 +52,7 @@ const ROLE_CONFIG: Record<string, { label: string; className: string }> = {
   USER: { label: "User", className: "bg-blue-100 text-blue-800" },
   NURD: { label: "⚡ Nurd", className: "bg-purple-100 text-purple-800" },
   MODERATOR: { label: "Moderator", className: "bg-orange-100 text-orange-800" },
+  SENIOR_MODERATOR: { label: "Sr. Moderator", className: "bg-teal-100 text-teal-800" },
   ADMIN: { label: "Admin", className: "bg-red-100 text-red-800" },
 };
 

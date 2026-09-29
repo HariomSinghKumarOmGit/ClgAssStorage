@@ -1,10 +1,7 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/layout/Navbar";
 import { SessionProvider } from "next-auth/react";
-
-const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: {
@@ -26,7 +23,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="h-full">
-      <body className={`${inter.className} h-full bg-gray-50 text-gray-900 antialiased`}>
+      <body className="h-full font-sans bg-gray-50 text-gray-900 antialiased">
         <SessionProvider>
           <Navbar />
           <main className="min-h-[calc(100vh-4rem)]">{children}</main>

@@ -23,7 +23,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           where: { id: user.id },
           select: { role: true, isApproved: true },
         });
-        token.role = dbUser?.role ?? "USER";
+        token.role = dbUser?.role ?? "USER"; // Default role is USER
         token.isApproved = dbUser?.isApproved ?? false;
         token.userId = user.id;
       }

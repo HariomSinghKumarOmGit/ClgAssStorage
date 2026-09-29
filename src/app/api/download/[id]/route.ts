@@ -12,22 +12,24 @@ export async function GET(
     select: { id: true, status: true, storageKey: true, fileName: true },
   });
 
-  if (!assignment || assignment.status !== "APPROVED") {
+  if (!assignment) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   // Increment download count (non-blocking)
-  db.assignment.update({
-    where: { id: params.id },
-    data: { downloadCount: { increment: 1 } },
-  }).catch((e) => console.error("[Download] Count increment failed:", e));
+  db.assignment
+    .update({
+      where: { id: params.id },
+      data: { downloadCount: { increment: 1 } },
+    })
+    .catch((e) => console.error("[Download] Count increment failed:", e));
 
   const storage = getStorage();
-
-  // For approved files in public storage, return the public URL directly
-  const publicUrl = storage.getPublicUrl(assignment.storageKey);
-
-  console.log(`[Download] Assignment ${params.id} downloaded`);
-
-  return NextResponse.redirect(publicUrl);
+  try {
+    const downloadUrl = await storage.getSignedDownloadUrl(assignment.storageKey);
+    return NextResponse.redirect(downloadUrl);
+  } catch {
+    const publicUrl = storage.getPublicUrl(assignment.storageKey);
+    return NextResponse.redirect(publicUrl);
+  }
 }

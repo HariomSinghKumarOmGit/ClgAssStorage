@@ -60,14 +60,20 @@ export async function POST(req: Request) {
       }
 
       case "set_role": {
-        if (!role || !["USER", "NURD", "MODERATOR", "ADMIN"].includes(role)) {
+        if (!role || !["USER", "NURD", "MODERATOR", "SENIOR_MODERATOR", "ADMIN"].includes(role)) {
           return NextResponse.json({ success: false, error: "Invalid role" });
         }
-        // When upgrading to NURD or higher, also approve upload access
-        const shouldApprove = role !== "USER";
+        // When upgrading to NURD or higher uploader roles, also approve upload access.
+        // MODERATOR and SENIOR_MODERATOR are NOT uploaders — don't auto-approve.
+        const shouldApprove = role === "NURD" || role === "ADMIN";
         await db.user.update({
           where: { id: userId },
-          data: { role, ...(shouldApprove ? { isApproved: true } : {}) },
+          data: {
+            role,
+            ...(shouldApprove ? { isApproved: true } : {}),
+            // Revoke upload access for mod roles (they don't upload)
+            ...(role === "MODERATOR" || role === "SENIOR_MODERATOR" ? { isApproved: false } : {}),
+          },
         });
         console.log(`[Admin] Set user ${userId} role to ${role}`);
         break;

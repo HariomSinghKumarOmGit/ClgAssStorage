@@ -4,13 +4,16 @@ import { getFolderTree } from "@/server/actions/folders";
 import { FolderManager } from "@/components/admin/FolderManager";
 import Link from "next/link";
 import type { Metadata } from "next";
+import { canCreateFolders } from "@/lib/auth/helpers";
+import type { UserRole } from "@prisma/client";
 
 export const metadata: Metadata = { title: "Folder Manager" };
 
 export default async function AdminFoldersPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
-  if (session.user.role !== "ADMIN") redirect("/admin");
+  // SENIOR_MODERATOR and ADMIN can access folders
+  if (!canCreateFolders(session.user.role as UserRole)) redirect("/admin");
 
   const folders = await getFolderTree();
 
