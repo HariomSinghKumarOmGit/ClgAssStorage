@@ -95,9 +95,20 @@ export function UploadForm() {
       .finally(() => setLoadingCategories(false));
   }, [selectedClassroom, selectedType]);
 
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB limit
+
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(e.target.files || []);
     if (selected.length === 0) return;
+
+    const oversizedFiles = selected.filter((f) => f.size > MAX_FILE_SIZE);
+    if (oversizedFiles.length > 0) {
+      setError(`⚠️ File "${oversizedFiles[0].name}" exceeds the 5MB size limit. Please choose a smaller file.`);
+      setFiles([]);
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
+
     setFiles(selected.slice(0, 6)); // max 6 files
     setError("");
   }
@@ -144,6 +155,12 @@ export function UploadForm() {
       return;
     }
 
+    const oversized = files.find((f) => f.size > MAX_FILE_SIZE);
+    if (oversized) {
+      setError(`⚠️ File "${oversized.name}" exceeds the 5MB size limit (${formatBytes(oversized.size)}).`);
+      return;
+    }
+
     setLoading(true);
     setError("");
 
@@ -160,6 +177,13 @@ export function UploadForm() {
           method: "POST",
           body: fd,
         });
+
+        if (res.status === 413) {
+          setError(`File size is too large for the server (HTTP 413). Max file size is 5MB.`);
+          hasError = true;
+          break;
+        }
+
         const data = await res.json();
 
         if (!res.ok || !data.success) {
@@ -393,7 +417,7 @@ export function UploadForm() {
                   <svg className="h-10 w-10 text-gray-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                   </svg>
-                  <p className="text-sm font-semibold text-gray-700">Click to choose files (Max 6)</p>
+                  <p className="text-sm font-semibold text-gray-700">Click to choose files (Max 6, up to 5MB each)</p>
                   <p className="text-xs text-gray-400 mt-1">PDF, DOC, DOCX, PPT, PPTX, TXT</p>
                 </>
               )}

@@ -24,11 +24,19 @@ export default async function AdminPage() {
       categories: {
         orderBy: [{ type: "asc" }, { name: "asc" }],
         include: {
+          files: {
+            orderBy: { uploadedAt: "desc" },
+          },
           _count: { select: { files: true } },
         },
       },
     },
   });
+
+  const totalUploadedFiles = classrooms.reduce(
+    (sum, c) => sum + c.categories.reduce((catSum, cat) => catSum + cat.files.length, 0),
+    0
+  );
 
   const stats = {
     totalClassrooms: classrooms.length,
@@ -41,6 +49,7 @@ export default async function AdminPage() {
       (sum, c) => sum + c.categories.filter((cat) => cat.type === "assignment").length,
       0
     ),
+    totalUploadedFiles,
   };
 
   // Serialize for client component (dates to strings)
@@ -52,6 +61,10 @@ export default async function AdminPage() {
       ...cat,
       createdAt: cat.createdAt.toISOString(),
       updatedAt: cat.updatedAt.toISOString(),
+      files: cat.files.map((file) => ({
+        ...file,
+        uploadedAt: file.uploadedAt.toISOString(),
+      })),
     })),
   }));
 
@@ -69,7 +82,7 @@ export default async function AdminPage() {
       </div>
 
       {/* Stats Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="bg-brand-50 border border-brand-200 rounded-2xl p-5">
           <p className="text-xs font-bold uppercase tracking-wider text-brand-700">Classrooms</p>
           <p className="text-3xl font-extrabold text-brand-900 mt-1">{stats.totalClassrooms}</p>
@@ -85,6 +98,10 @@ export default async function AdminPage() {
         <div className="bg-green-50 border border-green-200 rounded-2xl p-5">
           <p className="text-xs font-bold uppercase tracking-wider text-green-700">Total Categories</p>
           <p className="text-3xl font-extrabold text-green-900 mt-1">{stats.totalCategories}</p>
+        </div>
+        <div className="bg-purple-50 border border-purple-200 rounded-2xl p-5">
+          <p className="text-xs font-bold uppercase tracking-wider text-purple-700">PDF Files</p>
+          <p className="text-3xl font-extrabold text-purple-900 mt-1">{stats.totalUploadedFiles}</p>
         </div>
       </div>
 

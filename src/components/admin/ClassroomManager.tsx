@@ -5,6 +5,15 @@ import { useRouter } from "next/navigation";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+interface ClassroomFileData {
+  id: string;
+  fileName: string;
+  fileSize: number;
+  fileType: string;
+  storageKey: string;
+  uploadedAt: string;
+}
+
 interface CategoryData {
   id: string;
   name: string;
@@ -12,6 +21,7 @@ interface CategoryData {
   classroomId: string;
   createdAt: string;
   updatedAt: string;
+  files?: ClassroomFileData[];
   _count: { files: number };
 }
 
@@ -54,8 +64,9 @@ export function ClassroomManager({ initialClassrooms }: ClassroomManagerProps) {
 
   // Modal state
   const [modal, setModal] = useState<{
-    type: "add-classroom" | "rename-classroom" | "add-category" | "rename-category" | "delete-confirm" | null;
+    type: "add-classroom" | "rename-classroom" | "add-category" | "rename-category" | "delete-confirm" | "delete-file-confirm" | null;
     target?: ClassroomData | CategoryData;
+    targetFile?: ClassroomFileData;
     categoryType?: "lab" | "assignment";
   }>({ type: null });
   const [inputValue, setInputValue] = useState("");
@@ -78,9 +89,10 @@ export function ClassroomManager({ initialClassrooms }: ClassroomManagerProps) {
   function openModal(
     type: typeof modal.type,
     target?: ClassroomData | CategoryData,
-    categoryType?: "lab" | "assignment"
+    categoryType?: "lab" | "assignment",
+    targetFile?: ClassroomFileData
   ) {
-    setModal({ type, target, categoryType });
+    setModal({ type, target, categoryType, targetFile });
     setInputValue(
       type === "rename-classroom"
         ? (target as ClassroomData)?.name ?? ""
@@ -254,6 +266,39 @@ export function ClassroomManager({ initialClassrooms }: ClassroomManagerProps) {
     }
   }
 
+  // ─── File CRUD ──────────────────────────────────────────────────────────────
+
+  async function handleDeleteFile(file: ClassroomFileData, category: CategoryData) {
+    setLoading(true);
+    try {
+      await apiFetch(`/api/admin/files/${file.id}`, { method: "DELETE" });
+      setClassrooms((prev) =>
+        prev.map((c) =>
+          c.id === category.classroomId
+            ? {
+                ...c,
+                categories: c.categories.map((cat) =>
+                  cat.id === category.id
+                    ? {
+                        ...cat,
+                        files: (cat.files ?? []).filter((f) => f.id !== file.id),
+                        _count: { files: Math.max(0, cat._count.files - 1) },
+                      }
+                    : cat
+                ),
+              }
+            : c
+        )
+      );
+      showSuccess(`File "${file.fileName}" force deleted from Supabase Storage & Database.`);
+      closeModal();
+    } catch (err) {
+      showError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   // ─── Logout ────────────────────────────────────────────────────────────────
 
   async function handleLogout() {
@@ -365,6 +410,7 @@ export function ClassroomManager({ initialClassrooms }: ClassroomManagerProps) {
                 onAdd={() => openModal("add-category", undefined, "lab")}
                 onRename={(cat) => openModal("rename-category", cat)}
                 onDelete={(cat) => openModal("delete-confirm", cat)}
+                onDeleteFile={(file, cat) => openModal("delete-file-confirm", cat, undefined, file)}
               />
 
               {/* Assignments Column */}
@@ -377,6 +423,7 @@ export function ClassroomManager({ initialClassrooms }: ClassroomManagerProps) {
                 onAdd={() => openModal("add-category", undefined, "assignment")}
                 onRename={(cat) => openModal("rename-category", cat)}
                 onDelete={(cat) => openModal("delete-confirm", cat)}
+                onDeleteFile={(file, cat) => openModal("delete-file-confirm", cat, undefined, file)}
               />
             </div>
           )}
@@ -508,6 +555,39 @@ export function ClassroomManager({ initialClassrooms }: ClassroomManagerProps) {
                 }}
               />
             )}
+
+            {/* DELETE FILE CONFIRM */}
+            {modal.type === "delete-file-confirm" && modal.targetFile && modal.target && (
+              <div>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 bg-red-100 text-red-600 rounded-xl flex items-center justify-center text-xl font-bold">
+                    🗑️
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">Force Delete PDF File</h3>
+                    <p className="text-xs text-red-600 font-medium">Permanently deletes from Supabase Storage & Database</p>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4 text-sm space-y-1.5">
+                  <p className="font-bold text-gray-900 truncate">📄 File: {modal.targetFile.fileName}</p>
+                  <p className="text-xs text-gray-500">📁 Category: {(modal.target as CategoryData).name}</p>
+                  <p className="text-xs text-gray-500">
+                    💾 Size: {Math.round(modal.targetFile.fileSize / 1024)} KB
+                  </p>
+                </div>
+
+                {error && <p className="text-xs text-red-600 bg-red-50 rounded-lg p-2 mb-3">{error}</p>}
+
+                <ModalButtons
+                  onCancel={closeModal}
+                  onConfirm={() => handleDeleteFile(modal.targetFile!, modal.target as CategoryData)}
+                  loading={loading}
+                  confirmText="Force Delete PDF"
+                  danger
+                />
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -526,6 +606,7 @@ function CategoryColumn({
   onAdd,
   onRename,
   onDelete,
+  onDeleteFile,
 }: {
   title: string;
   icon: string;
@@ -535,6 +616,7 @@ function CategoryColumn({
   onAdd: () => void;
   onRename: (cat: CategoryData) => void;
   onDelete: (cat: CategoryData) => void;
+  onDeleteFile?: (file: ClassroomFileData, category: CategoryData) => void;
 }) {
   const bg = colorClass === "amber" ? "bg-amber-50/50 border-amber-200/60" : "bg-blue-50/50 border-blue-200/60";
   const headerColor = colorClass === "amber" ? "text-amber-900" : "text-blue-900";
@@ -560,37 +642,86 @@ function CategoryColumn({
           No {type === "lab" ? "lab experiments" : "assignments"} added yet.
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {items.map((item) => (
             <div
               key={item.id}
-              className={`group flex items-center justify-between p-3 border rounded-xl text-sm font-semibold text-gray-800 ${bg}`}
+              className={`p-3 border rounded-2xl text-sm font-semibold text-gray-800 ${bg} space-y-2`}
             >
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="text-gray-400">•</span>
-                <span className="truncate">{item.name}</span>
-                {item._count.files > 0 && (
-                  <span className="text-[10px] text-gray-400 shrink-0">
-                    ({item._count.files} file{item._count.files !== 1 ? "s" : ""})
+              <div className="group flex items-center justify-between">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-gray-400">•</span>
+                  <span className="truncate">{item.name}</span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 ${
+                    item._count.files > 0 ? "bg-brand-100 text-brand-700" : "bg-gray-200 text-gray-500"
+                  }`}>
+                    {item._count.files} file{item._count.files !== 1 ? "s" : ""}
                   </span>
-                )}
+                </div>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2">
+                  <button
+                    onClick={() => onRename(item)}
+                    className="text-[11px] px-2 py-1 bg-white hover:bg-gray-100 border rounded-lg transition-colors"
+                    title="Rename category"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    onClick={() => onDelete(item)}
+                    className="text-[11px] px-2 py-1 bg-white hover:bg-red-50 text-red-600 border border-red-200 rounded-lg transition-colors"
+                    title="Delete category"
+                  >
+                    🗑️
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2">
-                <button
-                  onClick={() => onRename(item)}
-                  className="text-[11px] px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                  title="Rename"
-                >
-                  ✏️
-                </button>
-                <button
-                  onClick={() => onDelete(item)}
-                  className="text-[11px] px-2 py-1 bg-gray-100 hover:bg-red-100 text-red-600 rounded-lg transition-colors"
-                  title="Delete"
-                >
-                  🗑️
-                </button>
-              </div>
+
+              {/* Render uploaded PDF files for this item */}
+              {item.files && item.files.length > 0 ? (
+                <div className="space-y-1.5 pt-1.5 border-t border-gray-200/60">
+                  {item.files.map((file) => (
+                    <div
+                      key={file.id}
+                      className="flex items-center justify-between p-2 bg-white/90 hover:bg-white rounded-xl text-xs border border-gray-200/80 shadow-2xs group/file transition-all"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-base shrink-0">📄</span>
+                        <div className="min-w-0">
+                          <p className="font-bold text-gray-900 truncate" title={file.fileName}>
+                            {file.fileName}
+                          </p>
+                          <p className="text-[10px] text-gray-400">
+                            {Math.round(file.fileSize / 1024)} KB · {new Date(file.uploadedAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0 ml-2">
+                        <a
+                          href={`/api/file/${file.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold px-2 py-1 rounded-lg transition-colors flex items-center gap-0.5"
+                          title="Open PDF file"
+                        >
+                          View PDF ↗
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => onDeleteFile?.(file, item)}
+                          className="text-[10px] bg-red-50 hover:bg-red-100 text-red-600 font-bold px-2 py-1 rounded-lg transition-colors"
+                          title="Force delete this PDF file from Supabase Storage"
+                        >
+                          🗑️ Delete PDF
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[11px] text-gray-400 italic pt-1 font-normal">
+                  No files uploaded yet in this {type === "lab" ? "experiment" : "assignment"}.
+                </p>
+              )}
             </div>
           ))}
         </div>

@@ -66,6 +66,23 @@ export function AdminQueueTable({ assignments }: AdminQueueTableProps) {
     setLoading(null);
   }
 
+  async function handleForceDelete(id: string, title: string) {
+    if (!confirm(`Are you sure you want to force delete "${title}"? This will permanently remove the file from Supabase Storage and Database.`)) {
+      return;
+    }
+    setLoading(id + "-delete");
+    try {
+      const res = await fetch(`/api/admin/assignments/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to delete");
+      router.refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(null);
+    }
+  }
+
   if (assignments.length === 0) {
     return (
       <div className="text-center py-16 bg-white rounded-2xl border border-gray-200">
@@ -151,6 +168,15 @@ export function AdminQueueTable({ assignments }: AdminQueueTableProps) {
                           </Button>
                         </>
                       )}
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        loading={loading === a.id + "-delete"}
+                        onClick={() => handleForceDelete(a.id, a.title)}
+                        title="Force delete this PDF assignment permanently"
+                      >
+                        🗑️ Delete
+                      </Button>
                     </div>
                   </td>
                 </tr>

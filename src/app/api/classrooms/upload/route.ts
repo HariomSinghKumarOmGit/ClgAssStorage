@@ -11,6 +11,9 @@ export async function POST(request: Request) {
     const categoryId = formData.get("categoryId") as string | null;
 
     if (!file) return NextResponse.json({ error: "No file provided" }, { status: 400 });
+    if (file.size > 5 * 1024 * 1024) {
+      return NextResponse.json({ error: "File size exceeds the 5MB limit. Please compress or choose a smaller file." }, { status: 400 });
+    }
     if (!classroomId) return NextResponse.json({ error: "No classroom selected" }, { status: 400 });
     if (!categoryId) return NextResponse.json({ error: "No category selected" }, { status: 400 });
     const category = await db.category.findFirst({
