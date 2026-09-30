@@ -189,6 +189,51 @@ model Assignment {
   @@index([fileHash])
 }
 
+// ─── Academic Hierarchy (Admin-controlled) ────────────────────────────────────
+
+model Classroom {
+  id          String     @id @default(cuid())
+  name        String
+  slug        String     @unique
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  categories  Category[]
+
+  @@index([slug])
+}
+
+model Category {
+  id          String     @id @default(cuid())
+  classroomId String
+  type        String     // "lab" or "assignment"
+  name        String
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  classroom   Classroom  @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  files       ClassroomFile[]
+
+  @@index([classroomId])
+  @@index([type])
+}
+
+model ClassroomFile {
+  id           String   @id @default(cuid())
+  categoryId   String
+  classroomId  String
+  fileName     String
+  fileSize     Int
+  fileType     String
+  storageKey   String   // Supabase storage path
+  uploadedAt   DateTime @default(now())
+
+  category     Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@index([categoryId])
+  @@index([classroomId])
+}
+
 // ─── Reports ──────────────────────────────────────────────────────────────────
 
 model Report {
@@ -207,3 +252,4 @@ model Report {
   @@index([assignmentId])
   @@index([status])
 }
+

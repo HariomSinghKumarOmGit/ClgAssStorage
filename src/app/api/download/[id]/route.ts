@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth/config";
 import { db } from "@/lib/db";
 import { getStorage } from "@/lib/storage";
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: { id: string } }
 ) {
   const assignment = await db.assignment.findUnique({
@@ -27,9 +26,15 @@ export async function GET(
   const storage = getStorage();
   try {
     const downloadUrl = await storage.getSignedDownloadUrl(assignment.storageKey);
-    return NextResponse.redirect(downloadUrl);
+    const redirectUrl = downloadUrl.startsWith("http")
+      ? downloadUrl
+      : new URL(downloadUrl, req.url).toString();
+    return NextResponse.redirect(redirectUrl);
   } catch {
     const publicUrl = storage.getPublicUrl(assignment.storageKey);
-    return NextResponse.redirect(publicUrl);
+    const redirectUrl = publicUrl.startsWith("http")
+      ? publicUrl
+      : new URL(publicUrl, req.url).toString();
+    return NextResponse.redirect(redirectUrl);
   }
 }

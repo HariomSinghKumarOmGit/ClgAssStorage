@@ -10,6 +10,9 @@ out/
 # Production
 build/
 
+# Local uploads
+public/uploads/
+
 # Environment files — NEVER commit these
 .env
 .env.local

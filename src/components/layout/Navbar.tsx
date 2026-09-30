@@ -7,12 +7,6 @@ export async function Navbar() {
   const session = await auth();
   const user = session?.user;
 
-  const isAdmin = user?.role === "ADMIN";
-  const canModerate =
-    user?.role === "MODERATOR" ||
-    user?.role === "SENIOR_MODERATOR" ||
-    user?.role === "ADMIN";
-
   return (
     <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -27,36 +21,21 @@ export async function Navbar() {
             <span className="font-bold text-gray-900 text-lg">StudyShare</span>
           </Link>
 
-          {/* Navigation */}
-          <div className="flex items-center gap-4 sm:gap-6">
-            <Link
-              href="/"
-              className="text-sm font-bold text-gray-900 hover:text-brand-600 transition-colors"
-            >
-              HOME
-            </Link>
-            <Link
-              href="/assignments"
-              className="text-sm text-gray-600 hover:text-gray-900 font-medium transition-colors"
-            >
-              Browse
-            </Link>
-            <Link
-              href="/admin"
-              className="text-sm text-brand-700 hover:text-brand-900 font-bold transition-colors"
-            >
-              Admin Panel
-            </Link>
+          {/* Right Actions */}
+          <div className="flex items-center gap-3">
+            {/* Upload Icon Button */}
             <Link
               href="/upload"
-              className="text-xs bg-brand-600 hover:bg-brand-700 text-white font-bold px-3.5 py-1.5 rounded-xl shadow-sm transition-colors flex items-center gap-1"
+              className="text-xs bg-brand-600 hover:bg-brand-700 text-white font-bold px-3.5 py-2 rounded-xl shadow-sm transition-colors flex items-center gap-1.5"
+              title="Upload File"
             >
-              <span>➕</span> Upload (5MB)
+              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              <span>Upload</span>
             </Link>
-          </div>
 
-          {/* Auth */}
-          <div className="flex items-center gap-3">
+            {/* Auth / Sign In */}
             {user ? (
               <div className="flex items-center gap-3">
                 <div className="hidden sm:flex items-center gap-2">
@@ -75,29 +54,15 @@ export async function Navbar() {
                     <RoleBadge role={user.role} />
                   </div>
                 </div>
-                <Link
-                  href="/dashboard"
-                  className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
-                >
-                  My Files
-                </Link>
                 <SignOutButton />
               </div>
             ) : (
-              <div className="flex items-center gap-2">
-                <Link
-                  href="/login"
-                  className="text-sm text-gray-600 hover:text-gray-900 font-medium transition-colors px-3 py-1.5"
-                >
-                  Sign in
-                </Link>
-                <Link
-                  href="/request-access"
-                  className="text-sm bg-brand-600 text-white hover:bg-brand-700 font-medium transition-colors px-4 py-1.5 rounded-lg"
-                >
-                  Request Access
-                </Link>
-              </div>
+              <Link
+                href="/admin/login"
+                className="text-sm text-gray-700 hover:text-gray-900 font-semibold transition-colors px-3 py-1.5 border border-gray-300 rounded-xl hover:bg-gray-50"
+              >
+                Sign in
+              </Link>
             )}
           </div>
         </div>
@@ -105,3 +70,4 @@ export async function Navbar() {
     </nav>
   );
 }
+

@@ -4,64 +4,66 @@ const prisma = new PrismaClient();
 
 async function main() {
   console.log("Seeding database...");
-  console.log("\nRole hierarchy:");
-  console.log("  USER (default)     — browse + download. Upload if approved.");
-  console.log("  NURD               — approved uploader with higher limits (10MB, 30 files).");
-  console.log("  MODERATOR          — approve/reject submissions only.");
-  console.log("  SENIOR_MODERATOR   — approve/reject + create/rename folders.");
-  console.log("  ADMIN              — full control.\n");
 
-  // Create initial folders
-  const folders = [
-    { name: "Computer Science", description: "CS assignments and resources" },
-    { name: "Mathematics", description: "Math assignments" },
-    { name: "Physics", description: "Physics resources" },
-    { name: "Chemistry", description: "Chemistry assignments" },
-    { name: "Engineering", description: "Engineering resources" },
-    { name: "Economics", description: "Economics resources" },
-  ];
+  const adminEmail = process.env.MEGA_EMAIL || "admin@studyshare.com";
+  const adminName = "Admin";
 
-  // ⚠️ IMPORTANT: Change this email to your actual Google account email BEFORE running seed
-  const ADMIN_EMAIL = "your-admin@gmail.com";
-  const ADMIN_NAME = "Admin";
-
-  // Create admin user (they must sign in with Google first, then this updates their role)
-  // If user doesn't exist yet, this creates a placeholder — they must sign in with Google
   const admin = await prisma.user.upsert({
-    where: { email: ADMIN_EMAIL },
+    where: { email: adminEmail },
     update: { role: "ADMIN", isApproved: true },
     create: {
-      email: ADMIN_EMAIL,
-      name: ADMIN_NAME,
+      email: adminEmail,
+      name: adminName,
       role: "ADMIN",
       isApproved: true,
     },
   });
 
-  console.log(`✓ Admin user: ${admin.email} (role: ${admin.role})`);
+  const student = await prisma.user.upsert({
+    where: { email: "student@studyshare.com" },
+    update: { role: "USER", isApproved: true },
+    create: {
+      email: "student@studyshare.com",
+      name: "Student Uploader",
+      role: "USER",
+      isApproved: true,
+    },
+  });
 
-  // Create folders
+  console.log(`✓ Admin user: ${admin.email} (role: ${admin.role})`);
+  console.log(`✓ Student uploader: ${student.email}`);
+
+  // Initial folders
+  const folders = [
+    { name: "Computer Science", description: "CS assignments and resources" },
+    { name: "Mathematics", description: "Math assignments" },
+    { name: "Physics", description: "Physics resources" },
+    { name: "Chemistry", description: "Chemistry assignments" },
+    { name: "Electrical Engineering", description: "EE lab experiments and assignments" },
+    { name: "Engineering", description: "General engineering resources" },
+  ];
+
   for (const folder of folders) {
-    const slug =
-      folder.name.toLowerCase().replace(/\s+/g, "-") + "-" + Date.now().toString(36);
-    await prisma.folder.upsert({
-      where: { slug },
-      update: {},
-      create: {
-        name: folder.name,
-        slug,
-        description: folder.description,
-        createdById: admin.id,
-      },
+    const existing = await prisma.folder.findFirst({
+      where: { name: folder.name },
     });
+
+    if (!existing) {
+      const slug =
+        folder.name.toLowerCase().replace(/\s+/g, "-") + "-" + Date.now().toString(36);
+      await prisma.folder.create({
+        data: {
+          name: folder.name,
+          slug,
+          description: folder.description,
+          createdById: admin.id,
+        },
+      });
+    }
   }
 
-  console.log(`✓ Created ${folders.length} default folders`);
-  console.log("\nSeed complete! ✅");
-  console.log("\n⚠️  Remember to:");
-  console.log("  1. Sign in with your Google account first");
-  console.log("  2. Run: npm run db:seed");
-  console.log("  3. Your Google account email must match ADMIN_EMAIL in prisma/seed.ts");
+  console.log(`✓ Default folders checked and created.`);
+  console.log("Seed complete! ✅");
 }
 
 main()

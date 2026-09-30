@@ -1,177 +1,84 @@
-import { Suspense } from "react";
 import { db } from "@/lib/db";
-import { AssignmentGrid } from "@/components/assignments/AssignmentGrid";
-import { LoadingState } from "@/components/ui/Modal";
-import { Pagination } from "@/components/ui/Modal";
+import { formatBytes } from "@/lib/utils";
 import type { Metadata } from "next";
-import type { SearchFilters } from "@/types";
 
 export const metadata: Metadata = {
-  title: "Browse Assignments",
-  description: "Browse approved academic assignments and resources.",
+  title: "Browse All Files",
+  description: "Browse all uploaded files across all classrooms.",
 };
 
-interface PageProps {
-  searchParams: {
-    q?: string;
-    subject?: string;
-    course?: string;
-    semester?: string;
-    college?: string;
-    fileType?: string;
-    folderId?: string;
-    sortBy?: string;
-    page?: string;
-  };
-}
-
-const PAGE_SIZE = 12;
-
-async function AssignmentResults({ searchParams }: PageProps) {
-  const page = Math.max(1, parseInt(searchParams.page ?? "1"));
-  const skip = (page - 1) * PAGE_SIZE;
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = {
-    status: "APPROVED",
-    ...(searchParams.subject && {
-      subject: { contains: searchParams.subject, mode: "insensitive" },
-    }),
-    ...(searchParams.course && {
-      course: { contains: searchParams.course, mode: "insensitive" },
-    }),
-    ...(searchParams.semester && { semester: searchParams.semester }),
-    ...(searchParams.college && {
-      college: { contains: searchParams.college, mode: "insensitive" },
-    }),
-    ...(searchParams.fileType && {
-      fileType: { contains: searchParams.fileType, mode: "insensitive" },
-    }),
-    ...(searchParams.folderId && { folderId: searchParams.folderId }),
-    ...(searchParams.q && {
-      OR: [
-        { title: { contains: searchParams.q, mode: "insensitive" } },
-        { description: { contains: searchParams.q, mode: "insensitive" } },
-        { subject: { contains: searchParams.q, mode: "insensitive" } },
-        { course: { contains: searchParams.q, mode: "insensitive" } },
-        { college: { contains: searchParams.q, mode: "insensitive" } },
-        { tags: { hasSome: [searchParams.q] } },
-      ],
-    }),
-  };
-
-  const orderBy =
-    searchParams.sortBy === "downloads"
-      ? { downloadCount: "desc" as const }
-      : { createdAt: "desc" as const };
-
-  const [assignments, total, filterOptions] = await Promise.all([
-    db.assignment.findMany({
-      where,
-      orderBy,
-      skip,
-      take: PAGE_SIZE,
-      select: {
-        id: true, title: true, slug: true, description: true,
-        subject: true, course: true, semester: true, college: true,
-        university: true, tags: true, fileName: true, fileSize: true,
-        fileType: true, status: true, downloadCount: true,
-        createdAt: true, approvedAt: true, rejectionReason: true, expiresAt: true,
-        uploadedBy: { select: { id: true, name: true, image: true } },
-        folder: { select: { id: true, name: true, slug: true } },
+export default async function BrowseFilesPage() {
+  const files = await db.classroomFile.findMany({
+    orderBy: { uploadedAt: "desc" },
+    include: {
+      category: {
+        include: {
+          classroom: true,
+        },
       },
-    }),
-    db.assignment.count({ where }),
-    db.assignment.findMany({
-      where: { status: "APPROVED" },
-      select: { subject: true, semester: true },
-      distinct: ["subject"],
-    }),
-  ]);
-
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+    },
+  });
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-gray-500">
-          {total} assignment{total !== 1 ? "s" : ""} found
-        </p>
-      </div>
-      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-      <AssignmentGrid assignments={assignments as any} />
-      <Pagination page={page} totalPages={totalPages} onPage={() => {}} />
-    </div>
-  );
-}
-
-export default function AssignmentsPage({ searchParams }: PageProps) {
-  const hasQuery = Object.values(searchParams).some(Boolean);
-
-  return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      {/* Header */}
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">
-          {searchParams.q ? `Results for "${searchParams.q}"` : "All Assignments"}
-        </h1>
-        <p className="text-gray-500 text-sm">
-          Only approved, quality-reviewed assignments are shown here.
+        <h1 className="text-3xl font-extrabold text-gray-900 mb-2">Browse All Files</h1>
+        <p className="text-sm text-gray-500">
+          Showing all {files.length} file{files.length !== 1 ? "s" : ""} uploaded across all classrooms.
         </p>
       </div>
 
-      {/* Filters */}
-      <form method="GET" className="bg-white border border-gray-200 rounded-xl p-4 mb-8">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <input
-            name="q"
-            defaultValue={searchParams.q}
-            placeholder="Search..."
-            className="col-span-2 sm:col-span-3 lg:col-span-2 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-          />
-          <input
-            name="subject"
-            defaultValue={searchParams.subject}
-            placeholder="Subject"
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-          />
-          <input
-            name="semester"
-            defaultValue={searchParams.semester}
-            placeholder="Semester"
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-          />
-          <select
-            name="sortBy"
-            defaultValue={searchParams.sortBy}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
-          >
-            <option value="newest">Newest</option>
-            <option value="downloads">Most downloaded</option>
-          </select>
-          <div className="flex gap-2">
-            <button
-              type="submit"
-              className="flex-1 bg-brand-600 text-white rounded-lg px-3 py-2 text-sm font-medium hover:bg-brand-700 transition-colors"
-            >
-              Search
-            </button>
-            {hasQuery && (
-              <a
-                href="/assignments"
-                className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 border border-gray-300 rounded-lg transition-colors"
-              >
-                ✕
-              </a>
-            )}
-          </div>
+      {files.length === 0 ? (
+        <div className="bg-white rounded-3xl border border-dashed border-gray-300 p-12 text-center text-gray-500">
+          <p className="text-4xl mb-3">📂</p>
+          <p className="font-semibold text-gray-700">No files uploaded yet.</p>
+          <p className="text-sm mt-1">Files uploaded to any classroom will appear here.</p>
         </div>
-      </form>
-
-      {/* Results */}
-      <Suspense fallback={<LoadingState message="Loading assignments..." />}>
-        <AssignmentResults searchParams={searchParams} />
-      </Suspense>
+      ) : (
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+          <ul className="divide-y divide-gray-100">
+            {files.map((file) => (
+              <li key={file.id} className="hover:bg-gray-50 transition-colors">
+                <a
+                  href={`/api/file/${file.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between p-5 gap-4 group"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center text-xl shrink-0 group-hover:bg-brand-100 transition-colors">
+                      📄
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-gray-900 group-hover:text-brand-600 transition-colors">
+                        {file.fileName}
+                      </h4>
+                      <div className="flex items-center flex-wrap gap-2 mt-1 text-xs text-gray-500 font-medium">
+                        <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-md">
+                          {file.category.classroom.name}
+                        </span>
+                        <span className="text-gray-300">›</span>
+                        <span className={`px-2 py-0.5 rounded-md ${
+                          file.category.type === "lab" ? "bg-amber-50 text-amber-700" : "bg-blue-50 text-blue-700"
+                        }`}>
+                          {file.category.name}
+                        </span>
+                        <span className="text-gray-300">·</span>
+                        <span>{formatBytes(file.fileSize)}</span>
+                        <span className="text-gray-300">·</span>
+                        <span>{new Date(file.uploadedAt).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center text-xs font-bold text-brand-600 shrink-0 group-hover:translate-x-1 transition-transform">
+                    Open PDF →
+                  </div>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
