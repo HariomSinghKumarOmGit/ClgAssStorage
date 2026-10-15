@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { ClassroomDisplay } from "@/components/ClassroomDisplay";
+import { ClassroomList } from "@/components/ClassroomDisplay";
 
 async function getClassroomsWithCategories() {
   try {
@@ -90,11 +90,7 @@ export default async function HomePage() {
             </p>
           </div>
         ) : (
-          <div className="space-y-6">
-            {classrooms.map((classroom) => (
-              <ClassroomDisplay key={classroom.id} classroom={classroom as any} />
-            ))}
-          </div>
+          <ClassroomList classrooms={classrooms as any} />
         )}
       </section>
 
